@@ -12,9 +12,18 @@ repositories {
 }
 dependencies {
     testImplementation(kotlin("test-junit5"))
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:+")
+
+    tasks.test {
+        useJUnitPlatform()
+    }
 }
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "14"
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }
 
 application {

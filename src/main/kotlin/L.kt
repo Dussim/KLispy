@@ -80,11 +80,32 @@ fun <T> L<T>.forEach(op: (T) -> Any) {
     }
 }
 
-inline fun <reified T> L<L<T>>.flatten(): L<T> = when (this) {
+fun <T> L<L<T>>.flatten(): L<T> = when (this) {
     None -> None
-    is Cons -> {
-        val l = mutableListOf<T>()
-        forEach(L<T>::forEach bindRight l::add)
-        L.of(*l.toTypedArray())
-    }
+    is Cons -> fold<L<T>, L<T>>(L.empty()) { acc, list ->
+        list.fold(acc) { acc2, elem -> Cons(elem, acc2) }
+    }.reverse()
+}
+
+fun <T> L<T>.reverse(): L<T> = when (this) {
+    None -> None
+    is Cons -> fold(L.empty()) { acc, elem -> Cons(elem, acc) }
+}
+
+fun <T> L<T>.joinToString(
+    prefix: String = "",
+    suffix: String = "",
+    transform: (T) -> String = { it.toString() }
+): String = when (this) {
+    None -> "$prefix $suffix"
+    is Cons -> "$prefix ${transform(head)} ${tail.joinToStringInternal(prefix, suffix, transform)}"
+}
+
+private fun <T> L<T>.joinToStringInternal(
+    prefix: String = "",
+    suffix: String = "",
+    transform: (T) -> String
+): String = when (this) {
+    None -> suffix
+    is Cons -> "${transform(head)} ${tail.joinToStringInternal(prefix, suffix, transform)}"
 }
