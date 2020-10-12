@@ -1,9 +1,11 @@
+package datastructures
+
 sealed class L<out T> {
     companion object
 }
 
 object None : L<Nothing>() {
-    override fun toString() = "None"
+    override fun toString() = "datastructures.None"
 }
 
 data class Cons<out T>(val head: T, val tail: L<T> = None) : L<T>()
@@ -73,7 +75,7 @@ fun <T> L<T>.isNotEmpty(): Boolean = this is Cons
 
 fun <T> L<T>.isOneElement(): Boolean = size == 1
 
-fun <T> L<T>.forEach(op: (T) -> Any) {
+fun <T> L<T>.forEach(op: (T) -> Unit) {
     if (this is Cons) {
         op(head)
         tail.forEach(op)

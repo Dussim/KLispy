@@ -1,3 +1,5 @@
+package datastructures
+
 sealed class Either<out L, out R>
 
 data class Left<out L>(val left: L) : Either<L, Nothing>() {

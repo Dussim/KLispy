@@ -1,5 +1,14 @@
+import datastructures.L
+import datastructures.empty
+import datastructures.joinToString
+import datastructures.map
+import datastructures.of
+import env.EmptyEnv
 import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.TestFactory
+import utils.compose
+import utils.emptyParamListForSymbol
+import utils.paramsNotNumbers
 import kotlin.math.pow
 import kotlin.test.assertEquals
 
@@ -16,7 +25,7 @@ internal class ExprTest {
                 dynamicTest(
                     "given list of numbers $listAsString when '+' operator is evaluated then correct value is returned $expected"
                 ) {
-                    assertEquals(expected, Plus.eval(l))
+                    assertEquals(expected, Plus.eval(EmptyEnv, l))
                 }
             }.stream()
 
@@ -25,9 +34,9 @@ internal class ExprTest {
         listOf(Plus, Minus, Multiply, Divide)
             .map { symbol ->
                 dynamicTest(
-                    "given empty list, when operator '$symbol' is evaluated then error is returned"
+                    "given datastructures.empty list, when operator '$symbol' is evaluated then error is returned"
                 ) {
-                    assertEquals(Error.emptyParamListForSymbol(symbol), symbol.eval(L.empty()))
+                    assertEquals(ErrorExpr.emptyParamListForSymbol(symbol), symbol.eval(EmptyEnv, L.empty()))
                 }
             }
 
@@ -38,9 +47,9 @@ internal class ExprTest {
                 dynamicTest(
                     "given non-numbers list, when operator '$symbol' is evaluated then error is returned"
                 ) {
-                    val l = L.of(Error(reason = "This is not a number"))
+                    val l = L.of(ErrorExpr(reason = "This is not a number"))
 
-                    assertEquals(Error.paramsNotNumbers(symbol, l), symbol.eval(l))
+                    assertEquals(ErrorExpr.paramsNotNumbers(symbol, l), symbol.eval(EmptyEnv, l))
                 }
             }
 
