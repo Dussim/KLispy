@@ -1,11 +1,14 @@
 package datastructures
 
+import iterators.Iter
+import iterators.ListIter
+
 sealed class L<out T> {
     companion object
 }
 
 object None : L<Nothing>() {
-    override fun toString() = "datastructures.None"
+    override fun toString() = "None"
 }
 
 data class Cons<out T>(val head: T, val tail: L<T> = None) : L<T>()
@@ -46,12 +49,9 @@ fun <T, V> L<T>.fold(acc: V, op: (V, T) -> V): V = when (this) {
     is Cons -> tail.fold(op(acc, head), op)
 }
 
-fun <T> Cons<T>.reduce(op: (T, T) -> T): T {
-    val (head, tail) = this
-    return when (tail) {
-        None -> head
-        is Cons -> tail.fold(head, op)
-    }
+fun <T> Cons<T>.reduce(op: (T, T) -> T): T = when (tail) {
+    None -> head
+    is Cons -> tail.fold(head, op)
 }
 
 fun <T> L<*>.allInstanceOf(clazz: Class<T>): Boolean = all { clazz.isInstance(it) }
@@ -62,11 +62,6 @@ fun <T> L<T>.find(predicate: (T) -> Boolean): O<T> = when (this) {
         true -> Some(head)
         false -> tail.find(predicate)
     }
-}
-
-fun <T> L<T>.string(): String = when (this) {
-    None -> ""
-    is Cons -> "$head ${tail.string()}"
 }
 
 fun <T> L<T>.isEmpty(): Boolean = this is None
@@ -97,17 +92,26 @@ fun <T> L<T>.reverse(): L<T> = when (this) {
 fun <T> L<T>.joinToString(
     prefix: String = "",
     suffix: String = "",
+    separator: String = "",
     transform: (T) -> String = { it.toString() }
 ): String = when (this) {
     None -> "$prefix $suffix"
-    is Cons -> "$prefix ${transform(head)} ${tail.joinToStringInternal(prefix, suffix, transform)}"
+    is Cons -> "$prefix ${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, separator, transform)}"
 }
 
 private fun <T> L<T>.joinToStringInternal(
     prefix: String = "",
     suffix: String = "",
+    separator: String = "",
     transform: (T) -> String
 ): String = when (this) {
     None -> suffix
-    is Cons -> "${transform(head)} ${tail.joinToStringInternal(prefix, suffix, transform)}"
+    is Cons -> "${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, transform = transform)}"
 }
+
+fun <T, V, R> L<T>.zip(o: L<V>, op: (T, V) -> R): L<R> = when {
+    this is Cons && o is Cons -> Cons(op(head, o.head), tail.zip(o.tail, op))
+    else -> None
+}
+
+fun <T> L<T>.iterator(): Iter<T> = ListIter(this)

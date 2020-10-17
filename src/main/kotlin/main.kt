@@ -1,61 +1,56 @@
+import datastructures.Cons
 import datastructures.L
-import datastructures.forEach
-import datastructures.map
+import datastructures.None
+import datastructures.iterator
 import datastructures.of
 import env.EnvImpl
-import utils.bindRight
-import utils.compose
-import utils.evalPrint
+import iterators.Iter
+import java.util.Scanner
 
 fun main() {
-    val list = L.of(1, 4, 5, 6, 2, 6).map(Int::toDouble compose ::Number)
-
-    L.of(Plus, Minus, Multiply, Divide)
-        .map(ParameterEvaluation<Expr>::eval bindRight list bindRight env.EmptyEnv)
-        .forEach(Expr::evalPrint)
-
-    val qExpr = QExpr(Plus, Minus, Multiply, Divide)
-
-    L.of(Head, Tail).map {
-        SExpr(it, qExpr)
-    }.forEach(Expr::evalPrint)
-
-    SExpr(
-        Join,
-        qExpr,
-        qExpr
-    ).evalPrint("( join $qExpr $qExpr ) ==> ")
-
-    SExpr(
-        Tail,
-        QExpr(Plus, Number(2.0), Number(5.0))
-    ).evalPrint()
-
-    SExpr(
-        ListF,
-        Plus,
-        Minus,
-        Multiply
-    ).evalPrint().also {
-        SExpr(Eval, it).evalPrint()
-    }
-
     val env = EnvImpl()
+    val s = Scanner(System.`in`)
+    do {
+        print("klispy> ")
+        val line = s.nextLine()
+        if (line.startsWith("parse")) {
+            line.substringAfter("parse").toExpr().also {
+                println("parsed -> $it")
+            }
+        } else {
+            println(line.toExpr().eval(env))
+        }
+    } while (line != "exit")
+    s.close()
+}
 
-    SExpr(
-        Def, QExpr(RuntimeSymbol("x"), RuntimeSymbol("y")),
-        QExpr(Plus),
-        L.of(1, 2, 3, 4, 5).map(Int::toDouble compose ::Number).let(::QExpr)
-    ).evalPrint(env = env)
+fun String.toExpr(): SExpr {
+    val l = L.of(*split(" ").filter(String::isNotBlank).toTypedArray())
+    val i = l.iterator()
+    return SExpr(parse(i))
+}
 
-    env[RuntimeSymbol("x")]?.evalPrint()
-    env[RuntimeSymbol("y")]?.evalPrint()
-
-    val qExpr2 = SExpr(
-        Join,
-        RuntimeSymbol("x"),
-        RuntimeSymbol("y")
-    ).evalPrint(env = env)
-
-    SExpr(Eval, qExpr2).evalPrint()
+private fun parse(i: Iter<String>): L<Expr> {
+    if (!i.hasNext()) return None
+    val s = i.next()
+    val expr = when (s) {
+        "+" -> Plus
+        "-" -> Minus
+        "/" -> Divide
+        "*" -> Multiply
+        "head" -> Head
+        "tail" -> Tail
+        "join" -> Join
+        "eval" -> Eval
+        "list" -> ListF
+        "def" -> Def
+        "\\" -> LambdaF
+        "{" -> QExpr(parse(i))
+        "(" -> SExpr(parse(i))
+        else -> s.toDoubleOrNull()?.let(::Number) ?: RuntimeSymbol(s)
+    }
+    return when (s) {
+        ")", "}" -> None
+        else -> Cons(expr, parse(i))
+    }
 }

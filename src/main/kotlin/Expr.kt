@@ -11,8 +11,10 @@ import datastructures.joinToString
 import datastructures.map
 import datastructures.of
 import datastructures.reduce
-import env.EmptyEnv
+import datastructures.size
+import datastructures.zip
 import env.Env
+import env.subEnv
 import utils.emptyParamListForSymbol
 import utils.paramsNotNumbers
 
@@ -100,16 +102,28 @@ object Def : BuiltInFunction("def") {
     override fun eval(env: Env, l: L<Expr>): Expr {
         if (l is Cons && l.head is QExpr && l.head.content.allInstanceOf(RuntimeSymbol::class.java)) {
             val symbols = l.head.content as L<RuntimeSymbol>
-            var value = l.tail as Cons<Expr>
-            symbols.forEach { symbol ->
-                env.add(symbol, value.head)
-                if (value.tail is Cons<Expr>) {
-                    value = value.tail as Cons<Expr>
-                }
-            }
+            symbols.zip(l.tail, ::Pair).forEach { (symbol, expr) -> env[symbol, true] = expr }
             return SExpr()
         }
         return ErrorExpr(reason = "$name cannot define non-symbol in $l")
+    }
+}
+
+object LambdaF : BuiltInFunction("\\") {
+    override fun eval(env: Env, l: L<Expr>): Expr {
+        if (
+            l.size == 2 &&
+            l is Cons &&
+            l.head is QExpr &&
+            l.tail is Cons &&
+            l.tail.head is QExpr &&
+            l.head.content.allInstanceOf(RuntimeSymbol::class.java)
+        ) {
+            val symbols = l.head.content as L<RuntimeSymbol>
+            val body = l.tail.head
+            return Lambda(symbols, body)
+        }
+        return ErrorExpr(reason = "TODO error message")
     }
 }
 
@@ -132,7 +146,7 @@ data class SExpr(val content: L<Expr>) : Expr() {
             val evaluated = content.map { expr ->
                 when (expr) {
                     is SExpr -> expr.eval(env)
-                    is RuntimeSymbol -> env[expr] ?: ErrorExpr(reason = "Symbol not found")
+                    is RuntimeSymbol -> expr.eval(env)
                     else -> expr
                 }
             }
@@ -144,16 +158,16 @@ data class SExpr(val content: L<Expr>) : Expr() {
             } else {
                 val (head, tail) = evaluated
                 when (head) {
-                    is BuiltInSymbol -> head.eval(env, tail)
-                    is BuiltInFunction -> head.eval(env, tail)
-                    is RuntimeSymbol -> env[head]?.eval(env, tail) ?: ErrorExpr("Unknown Symbol")
+                    is BuiltInSymbol, is BuiltInFunction, is Lambda, is RuntimeSymbol -> head.eval(env, tail)
                     else -> ErrorExpr(reason = "Not a symbol")
                 }
             }
         }
     }
 
-    private val error: (Expr) -> Boolean = { it is ErrorExpr }
+    companion object {
+        private val error: (Expr) -> Boolean = { it is ErrorExpr }
+    }
 }
 
 data class QExpr(val content: L<Expr>) : Expr() {
@@ -162,7 +176,23 @@ data class QExpr(val content: L<Expr>) : Expr() {
     override fun toString(): String = content.joinToString("{", "}")
 }
 
-data class RuntimeSymbol(val name: String) : Expr()
+data class RuntimeSymbol(val name: String) : Expr() {
+    override fun toString(): String = name
+
+    override fun eval(env: Env): Expr = env[this] ?: ErrorExpr("Symbol [ $name ] not found")
+
+    override fun eval(env: Env, l: L<Expr>): Expr = env[this]?.eval(env, l) ?: ErrorExpr("Symbol [ $name ] not found")
+}
+
+data class Lambda(val symbols: L<RuntimeSymbol>, val body: QExpr) : Expr() {
+    override fun eval(env: Env, l: L<Expr>): Expr {
+        val innerEnv = env.subEnv()
+        symbols.zip(l, ::Pair).forEach { (symbol, expr) -> innerEnv[symbol] = expr }
+        return SExpr(body.content).eval(innerEnv)
+    }
+
+    override fun toString(): String = "${symbols.joinToString("{", "}")} $body"
+}
 
 fun interface ParameterlessEvaluation<T : ParameterlessEvaluation<T>> {
     fun eval(env: Env): T
@@ -171,6 +201,3 @@ fun interface ParameterlessEvaluation<T : ParameterlessEvaluation<T>> {
 fun interface ParameterEvaluation<T : ParameterEvaluation<T>> {
     fun eval(env: Env, l: L<T>): T
 }
-
-fun <T : ParameterlessEvaluation<T>> ParameterlessEvaluation<T>.evalEmptyEnv() = eval(EmptyEnv)
-fun <T : ParameterEvaluation<T>> ParameterEvaluation<T>.evalEmptyEnv(l: L<T>) = eval(EmptyEnv, l)

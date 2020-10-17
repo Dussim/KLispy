@@ -4,8 +4,8 @@ import Expr
 import env.EmptyEnv
 import env.Env
 
-fun Expr.evalPrint(prefix: String = "", env: Env = EmptyEnv) = this.also {
-    println("$prefix${eval(env)}")
+fun Expr.evalPrint(prefix: String = "", env: Env = EmptyEnv) = eval(env).also {
+    println("$prefix$it")
 }
 
 infix fun <T, R1, R2> ((T) -> R1).compose(o: (R1) -> R2): (T) -> R2 {
