@@ -14,13 +14,14 @@ import datastructures.reduce
 import datastructures.size
 import datastructures.zip
 import env.Env
+import env.add
 import env.subEnv
 import utils.emptyParamListForSymbol
 import utils.paramsNotNumbers
 
-sealed class Expr : ParameterlessEvaluation<Expr>, ParameterEvaluation<Expr> {
-    override fun eval(env: Env, l: L<Expr>): Expr = eval(env)
-    override fun eval(env: Env): Expr = this
+sealed class Expr {
+    open fun eval(env: Env, l: L<Expr>): Expr = eval(env)
+    open fun eval(env: Env): Expr = this
 }
 
 data class ErrorExpr(val reason: String) : Expr() {
@@ -41,89 +42,35 @@ data class Number(val value: Double) : Expr() {
     override fun eval(env: Env): Expr = this
 }
 
-sealed class BuiltInSymbol(val symbol: String, private val op: (Number, Number) -> Number) : Expr() {
-    override fun toString(): String = symbol
-    override fun eval(env: Env): Expr = this
+sealed class Symbol : Expr() {
+    data class Unbound(val symbol: String) : Symbol() {
+        override fun toString(): String = symbol
+        override fun eval(env: Env): Expr = env[symbol] ?: ErrorExpr("Symbol [ $symbol ] not found")
+        override fun eval(env: Env, l: L<Expr>): Expr = env[symbol]?.eval(env, l) ?: ErrorExpr("Symbol [ $symbol ] not found")
+    }
 
-    @Suppress("UNCHECKED_CAST")
-    override fun eval(env: Env, l: L<Expr>): Expr = when (l) {
-        None -> ErrorExpr.emptyParamListForSymbol(this)
-        is Cons -> when (l.allInstanceOf(Number::class.java)) {
-            true -> {
-                l as Cons<Number>
-                when (this is Minus && l.isOneElement()) {
-                    true -> Number(-l.head.value)
-                    false -> l.reduce(op)
-                }
+    data class Builtin(val symbol: String, val function: Symbol.(env: Env, l: L<Expr>) -> Expr) : Symbol() {
+        override fun toString(): String = symbol
+        override fun eval(env: Env): Expr = this
+        override fun eval(env: Env, l: L<Expr>): Expr = function(env, l)
+    }
+
+    data class Bound(val symbol: String, val expr: Expr) : Symbol() {
+        override fun toString(): String = expr.toString()
+        override fun eval(env: Env): Expr = expr
+        override fun eval(env: Env, l: L<Expr>): Expr = expr.eval(env, l)
+    }
+}
+
+fun mathOp(symbol: String, op: (Cons<Number>) -> Expr): Symbol.Builtin {
+    return Symbol.Builtin(symbol) { _, l ->
+        when (l) {
+            None -> ErrorExpr.emptyParamListForSymbol(this)
+            is Cons -> when (l.allInstanceOf(Number::class.java)) {
+                true -> op(l as Cons<Number>)
+                false -> ErrorExpr.paramsNotNumbers(this, l)
             }
-            false -> ErrorExpr.paramsNotNumbers(this, l)
         }
-    }
-}
-
-object Plus : BuiltInSymbol("+", Number::plus)
-object Minus : BuiltInSymbol("-", Number::minus)
-object Multiply : BuiltInSymbol("*", Number::times)
-object Divide : BuiltInSymbol("/", Number::div)
-
-sealed class BuiltInFunction(val name: String) : Expr() {
-    override fun toString() = name
-    override fun eval(env: Env): Expr = this
-}
-
-object Head : BuiltInFunction("head") {
-    override fun eval(env: Env, l: L<Expr>): Expr = qExprFun(name, l) { cons -> QExpr(cons.head) }
-}
-
-object Tail : BuiltInFunction("tail") {
-    override fun eval(env: Env, l: L<Expr>): Expr = qExprFun(name, l) { cons -> QExpr(cons.tail) }
-}
-
-object Eval : BuiltInFunction("eval") {
-    override fun eval(env: Env, l: L<Expr>): Expr = qExprFun(name, l) { cons -> SExpr(cons).eval(env) }
-}
-
-object ListF : BuiltInFunction("list") {
-    override fun eval(env: Env, l: L<Expr>): Expr = QExpr(l)
-}
-
-object Join : BuiltInFunction("join") {
-    @Suppress("UNCHECKED_CAST")
-    override fun eval(env: Env, l: L<Expr>): Expr = when (l.allInstanceOf(QExpr::class.java)) {
-        true -> {
-            l as L<QExpr>
-            QExpr(l.map(QExpr::content).flatten())
-        }
-        false -> ErrorExpr(reason = "$name expects one or more parameters of type QExpr but got $l")
-    }
-}
-
-object Def : BuiltInFunction("def") {
-    override fun eval(env: Env, l: L<Expr>): Expr {
-        if (l is Cons && l.head is QExpr && l.head.content.allInstanceOf(RuntimeSymbol::class.java)) {
-            val symbols = l.head.content as L<RuntimeSymbol>
-            symbols.zip(l.tail, ::Pair).forEach { (symbol, expr) -> env[symbol, true] = expr }
-            return SExpr()
-        }
-        return ErrorExpr(reason = "$name cannot define non-symbol in $l")
-    }
-}
-
-object LambdaF : BuiltInFunction("\\") {
-    override fun eval(env: Env, l: L<Expr>): Expr {
-        if (
-            l.size == 2 &&
-            l is Cons &&
-            l.head is QExpr &&
-            l.tail is Cons &&
-            l.tail.head is QExpr &&
-            l.head.content.allInstanceOf(RuntimeSymbol::class.java)
-        ) {
-            val symbols = l.head.content as L<RuntimeSymbol>
-            val body = l.tail.head
-            return Lambda(symbols, body)
-        }
-        return ErrorExpr(reason = "TODO error message")
     }
 }
 
@@ -132,6 +79,48 @@ fun qExprFun(name: String, l: L<Expr>, f: (Cons<Expr>) -> Expr): Expr {
         f(l.head.content)
     } else {
         ErrorExpr(reason = "$name expects one parameter of type QExpr with at least one element but got $l")
+    }
+}
+
+val plus = mathOp("+") { cons -> cons.reduce(Number::plus) }
+val multiply = mathOp("*") { cons -> cons.reduce(Number::times) }
+val divide = mathOp("/") { cons -> cons.reduce(Number::div) }
+val minus = mathOp("-") { cons -> if (cons.isOneElement()) Number(-cons.head.value) else cons.reduce(Number::minus) }
+val list = Symbol.Builtin("list") { _, l -> QExpr(l) }
+val head = Symbol.Builtin("head") { _, l -> qExprFun("head", l) { cons -> QExpr(cons.head) } }
+val tail = Symbol.Builtin("tail") { _, l -> qExprFun("tail", l) { cons -> QExpr(cons.tail) } }
+val eval = Symbol.Builtin("eval") { env, l -> qExprFun("eval", l) { cons -> SExpr(cons).eval(env) } }
+val join = Symbol.Builtin("join") { _, l ->
+    when (l.allInstanceOf(QExpr::class.java)) {
+        true -> (l as L<QExpr>).run { QExpr(map(QExpr::content).flatten()) }
+        false -> ErrorExpr(reason = "join expects one or more parameters of type QExpr but got $l")
+    }
+}
+val def = Symbol.Builtin("def") { env, l ->
+    if (l is Cons && l.head is QExpr && l.head.content.allInstanceOf(Symbol.Unbound::class.java)) {
+        val symbols = l.head.content as L<Symbol.Unbound>
+        symbols.zip(l.tail, ::Pair).forEach { (runtimeSymbol, expr) ->
+            env.add(runtimeSymbol.bindTo(expr), true)
+        }
+        SExpr()
+    } else {
+        ErrorExpr(reason = "def cannot define non-symbol in $l")
+    }
+}
+val lambda = Symbol.Builtin("\\") { _, l ->
+    if (
+        l.size == 2 &&
+        l is Cons &&
+        l.head is QExpr &&
+        l.tail is Cons &&
+        l.tail.head is QExpr &&
+        l.head.content.allInstanceOf(Symbol.Unbound::class.java)
+    ) {
+        val symbols = l.head.content as L<Symbol.Unbound>
+        val body = l.tail.head
+        Lambda(symbols, body)
+    } else {
+        ErrorExpr(reason = "TODO error message")
     }
 }
 
@@ -146,20 +135,22 @@ data class SExpr(val content: L<Expr>) : Expr() {
             val evaluated = content.map { expr ->
                 when (expr) {
                     is SExpr -> expr.eval(env)
-                    is RuntimeSymbol -> expr.eval(env)
+                    is Symbol -> expr.eval(env)
                     else -> expr
                 }
             }
             when (val error = evaluated.find(error)) {
                 is Some -> error.value
-            }
-            if (evaluated.isOneElement()) {
-                evaluated.head
-            } else {
-                val (head, tail) = evaluated
-                when (head) {
-                    is BuiltInSymbol, is BuiltInFunction, is Lambda, is RuntimeSymbol -> head.eval(env, tail)
-                    else -> ErrorExpr(reason = "Not a symbol")
+                else -> {
+                    if (evaluated.isOneElement()) {
+                        evaluated.head
+                    } else {
+                        val (head, tail) = evaluated
+                        when (head) {
+                            is Lambda, is Symbol -> head.eval(env, tail)
+                            else -> ErrorExpr("Don't know what to do with ${evaluated.joinToString("[", "]")}")
+                        }
+                    }
                 }
             }
         }
@@ -176,28 +167,16 @@ data class QExpr(val content: L<Expr>) : Expr() {
     override fun toString(): String = content.joinToString("{", "}")
 }
 
-data class RuntimeSymbol(val name: String) : Expr() {
-    override fun toString(): String = name
-
-    override fun eval(env: Env): Expr = env[this] ?: ErrorExpr("Symbol [ $name ] not found")
-
-    override fun eval(env: Env, l: L<Expr>): Expr = env[this]?.eval(env, l) ?: ErrorExpr("Symbol [ $name ] not found")
-}
-
-data class Lambda(val symbols: L<RuntimeSymbol>, val body: QExpr) : Expr() {
+data class Lambda(val symbols: L<Symbol.Unbound>, val body: QExpr) : Expr() {
     override fun eval(env: Env, l: L<Expr>): Expr {
         val innerEnv = env.subEnv()
-        symbols.zip(l, ::Pair).forEach { (symbol, expr) -> innerEnv[symbol] = expr }
+        symbols.zip(l, ::Pair).forEach { (unbound, expr) ->
+            innerEnv.add(unbound.bindTo(expr))
+        }
         return SExpr(body.content).eval(innerEnv)
     }
 
-    override fun toString(): String = "${symbols.joinToString("{", "}")} $body"
+    override fun toString(): String = "\\ ${symbols.joinToString("{", "}")} $body"
 }
 
-fun interface ParameterlessEvaluation<T : ParameterlessEvaluation<T>> {
-    fun eval(env: Env): T
-}
-
-fun interface ParameterEvaluation<T : ParameterEvaluation<T>> {
-    fun eval(env: Env, l: L<T>): T
-}
+fun Symbol.Unbound.bindTo(expr: Expr): Symbol.Bound = Symbol.Bound(symbol, expr)

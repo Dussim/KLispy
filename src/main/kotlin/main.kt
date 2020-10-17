@@ -4,15 +4,19 @@ import datastructures.None
 import datastructures.iterator
 import datastructures.of
 import env.EnvImpl
+import env.addBuiltIns
 import iterators.Iter
 import java.util.Scanner
 
 fun main() {
+    println("can come handy -> \ndef { fun } ( \\ { args body } { def ( head args ) ( \\ ( tail args ) body ) } ) \nfun { add x y } { + x y }")
     val env = EnvImpl()
+    env.addBuiltIns()
     val s = Scanner(System.`in`)
-    do {
+    while (true) {
         print("klispy> ")
         val line = s.nextLine()
+        if (line == "exit") break
         if (line.startsWith("parse")) {
             line.substringAfter("parse").toExpr().also {
                 println("parsed -> $it")
@@ -20,7 +24,7 @@ fun main() {
         } else {
             println(line.toExpr().eval(env))
         }
-    } while (line != "exit")
+    }
     s.close()
 }
 
@@ -34,20 +38,9 @@ private fun parse(i: Iter<String>): L<Expr> {
     if (!i.hasNext()) return None
     val s = i.next()
     val expr = when (s) {
-        "+" -> Plus
-        "-" -> Minus
-        "/" -> Divide
-        "*" -> Multiply
-        "head" -> Head
-        "tail" -> Tail
-        "join" -> Join
-        "eval" -> Eval
-        "list" -> ListF
-        "def" -> Def
-        "\\" -> LambdaF
         "{" -> QExpr(parse(i))
         "(" -> SExpr(parse(i))
-        else -> s.toDoubleOrNull()?.let(::Number) ?: RuntimeSymbol(s)
+        else -> s.toDoubleOrNull()?.let(::Number) ?: Symbol.Unbound(s)
     }
     return when (s) {
         ")", "}" -> None
