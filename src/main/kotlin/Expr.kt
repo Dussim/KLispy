@@ -7,6 +7,7 @@ import datastructures.find
 import datastructures.flatten
 import datastructures.forEach
 import datastructures.isOneElement
+import datastructures.iterator
 import datastructures.joinToString
 import datastructures.map
 import datastructures.of
@@ -14,8 +15,11 @@ import datastructures.reduce
 import datastructures.size
 import datastructures.zip
 import env.Env
-import env.add
+import env.get
+import env.set
 import env.subEnv
+import iterators.toL
+import iterators.zip
 import utils.emptyParamListForSymbol
 import utils.paramsNotNumbers
 
@@ -43,19 +47,21 @@ data class Number(val value: Double) : Expr() {
 }
 
 sealed class Symbol : Expr() {
-    data class Unbound(val symbol: String) : Symbol() {
+    abstract val symbol: String
+
+    data class Unbound(override val symbol: String) : Symbol() {
         override fun toString(): String = symbol
         override fun eval(env: Env): Expr = env[symbol] ?: ErrorExpr("Symbol [ $symbol ] not found")
         override fun eval(env: Env, l: L<Expr>): Expr = env[symbol]?.eval(env, l) ?: ErrorExpr("Symbol [ $symbol ] not found")
     }
 
-    data class Builtin(val symbol: String, val function: Symbol.(env: Env, l: L<Expr>) -> Expr) : Symbol() {
+    data class Builtin(override val symbol: String, val function: Symbol.(env: Env, l: L<Expr>) -> Expr) : Symbol() {
         override fun toString(): String = symbol
         override fun eval(env: Env): Expr = this
         override fun eval(env: Env, l: L<Expr>): Expr = function(env, l)
     }
 
-    data class Bound(val symbol: String, val expr: Expr) : Symbol() {
+    data class Bound(override val symbol: String, val expr: Expr) : Symbol() {
         override fun toString(): String = expr.toString()
         override fun eval(env: Env): Expr = expr
         override fun eval(env: Env, l: L<Expr>): Expr = expr.eval(env, l)
@@ -100,7 +106,7 @@ val def = Symbol.Builtin("def") { env, l ->
     if (l is Cons && l.head is QExpr && l.head.content.allInstanceOf(Symbol.Unbound::class.java)) {
         val symbols = l.head.content as L<Symbol.Unbound>
         symbols.zip(l.tail, ::Pair).forEach { (runtimeSymbol, expr) ->
-            env.add(runtimeSymbol.bindTo(expr), true)
+            env.set(runtimeSymbol.bindTo(expr), true)
         }
         SExpr()
     } else {
@@ -129,6 +135,7 @@ data class SExpr(val content: L<Expr>) : Expr() {
 
     override fun toString(): String = content.joinToString("(", ")")
 
+    // todo refactor this, it looks terrible
     override fun eval(env: Env): Expr = when (content) {
         None -> this
         is Cons -> {
@@ -170,13 +177,33 @@ data class QExpr(val content: L<Expr>) : Expr() {
 data class Lambda(val symbols: L<Symbol.Unbound>, val body: QExpr) : Expr() {
     override fun eval(env: Env, l: L<Expr>): Expr {
         val innerEnv = env.subEnv()
-        symbols.zip(l, ::Pair).forEach { (unbound, expr) ->
-            innerEnv.add(unbound.bindTo(expr))
+        val symbolsIterator = symbols.iterator()
+        val valuesIterator = l.iterator()
+
+        symbolsIterator.zip(valuesIterator, ::Pair).forEach { (unbound, expr) ->
+            innerEnv.set(unbound.bindTo(expr))
         }
-        return SExpr(body.content).eval(innerEnv)
+
+        // currying
+        return when (symbolsIterator.hasNext()) {
+            true -> Lambda(symbolsIterator.toL(), body.deepConstitution(innerEnv) as QExpr)
+            false -> SExpr(body.content).eval(innerEnv)
+        }
     }
 
     override fun toString(): String = "\\ ${symbols.joinToString("{", "}")} $body"
 }
 
 fun Symbol.Unbound.bindTo(expr: Expr): Symbol.Bound = Symbol.Bound(symbol, expr)
+
+fun Expr.deepConstitution(env: Env): Expr {
+    return when (this) {
+        is QExpr -> QExpr(
+            content.map { it.deepConstitution(env) }
+        )
+        is SExpr -> SExpr(
+            content.map { it.deepConstitution(env) }
+        )
+        else -> env[this, false] ?: this
+    }
+}
