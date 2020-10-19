@@ -9,7 +9,7 @@ import iterators.Iter
 import java.util.Scanner
 
 fun main() {
-    println("can come handy -> \ndef { fun } ( \\ { args body } { def ( head args ) ( \\ ( tail args ) body ) } ) \nfun { add x y } { + x y }")
+    println("can be handy -> \ndef { fun } ( \\ { args body } { def ( head args ) ( \\ ( tail args ) body ) } ) \nfun { add x y } { + x y }")
     val env = EnvImpl()
     env.addBuiltIns()
     val s = Scanner(System.`in`)

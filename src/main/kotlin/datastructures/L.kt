@@ -89,6 +89,14 @@ fun <T> L<T>.reverse(): L<T> = when (this) {
     is Cons -> fold(L.empty()) { acc, elem -> Cons(elem, acc) }
 }
 
+fun <T> L<T>.index(i: Int): L<T> = when (i) {
+    0 -> this
+    else -> when (this) {
+        None -> None
+        is Cons -> tail.index(i - 1)
+    }
+}
+
 fun <T> L<T>.joinToString(
     prefix: String = "",
     suffix: String = "",

@@ -7,13 +7,19 @@ import datastructures.forEach
 import datastructures.of
 import def
 import divide
+import equal
 import eval
+import greaterEqual
+import greaterThan
 import head
 import join
 import lambda
+import lessEqual
+import lessThan
 import list
 import minus
 import multiply
+import notEqual
 import plus
 import tail
 
@@ -30,7 +36,7 @@ fun Env.set(symbol: Symbol.Bound, global: Boolean = false) = this.set(symbol.sym
 fun Env.subEnv(): Env = EnvImpl(this)
 
 fun Env.addBuiltIns() {
-    L.of(plus, minus, divide, multiply, list, head, tail, eval, join, def, lambda)
+    L.of(plus, minus, divide, multiply, list, head, tail, eval, join, def, lambda, greaterThan, lessThan, greaterEqual, lessEqual, equal, notEqual)
         .forEach(::set)
 }
 
