@@ -1,18 +1,28 @@
+import asserts.allOfType
+import asserts.assertAtLeastOneExpr
+import asserts.assertCons
+import asserts.assertOneExpr
+import asserts.assertThreeExprs
+import asserts.assertTwoExprs
+import asserts.assertType
+import asserts.assertTypes
 import datastructures.Cons
 import datastructures.L
-import datastructures.None
+import datastructures.Left
+import datastructures.Right
 import datastructures.Some
-import datastructures.allInstanceOf
 import datastructures.find
+import datastructures.flatMap
 import datastructures.flatten
 import datastructures.forEach
+import datastructures.isEmpty
 import datastructures.isOneElement
 import datastructures.iterator
 import datastructures.joinToString
 import datastructures.map
+import datastructures.merge
 import datastructures.of
 import datastructures.reduce
-import datastructures.size
 import datastructures.zip
 import env.Env
 import env.get
@@ -20,8 +30,7 @@ import env.set
 import env.subEnv
 import iterators.toL
 import iterators.zip
-import utils.emptyParamListForSymbol
-import utils.paramsNotNumbers
+import utils.bindRight
 
 sealed class Expr {
     open fun eval(env: Env, l: L<Expr>): Expr = eval(env)
@@ -103,37 +112,30 @@ data class SExpr(val content: L<Expr>) : Expr() {
 
     override fun toString(): String = content.joinToString("(", ")")
 
-    // todo refactor this, it looks terrible
-    override fun eval(env: Env): Expr = when (content) {
-        None -> this
-        is Cons -> {
-            val evaluated = content.map { expr ->
+    override fun eval(env: Env): Expr {
+        if (content.isEmpty()) return SExpr()
+        val evaluated = content.map(Expr::evalChildren bindRight env)
+        return Right(Pair(evaluated, evaluated.find(error)))
+            .flatMap { (list, error) -> if (error is Some) Left(error.value) else Right(list) }
+            .flatMap(L<Expr>::assertAtLeastOneExpr)
+            .map { (expr, l) ->
+                if (l.isEmpty()) return expr
                 when (expr) {
-                    is SExpr -> expr.eval(env)
-                    is Symbol -> expr.eval(env)
-                    else -> expr
+                    is Lambda, is Symbol -> expr.eval(env, l)
+                    else -> ErrorExpr("Don't know what to do with ${evaluated.joinToString("[", "]")}")
                 }
-            }
-            when (val error = evaluated.find(error)) {
-                is Some -> error.value
-                else -> {
-                    if (evaluated.isOneElement()) {
-                        evaluated.head
-                    } else {
-                        val (head, tail) = evaluated
-                        when (head) {
-                            is Lambda, is Symbol -> head.eval(env, tail)
-                            else -> ErrorExpr("Don't know what to do with ${evaluated.joinToString("[", "]")}")
-                        }
-                    }
-                }
-            }
-        }
+            }.merge()
     }
 
     companion object {
         private val error: (Expr) -> Boolean = { it is ErrorExpr }
     }
+}
+
+private fun Expr.evalChildren(env: Env): Expr = when (this) {
+    is SExpr -> eval(env)
+    is Symbol -> eval(env)
+    else -> this
 }
 
 sealed class Bool(private val name: String) : Expr() {
@@ -145,63 +147,74 @@ object True : Bool("true")
 
 fun mathOp(symbol: String, op: (Cons<Number>) -> Expr): Symbol.Builtin {
     return Symbol.Builtin(symbol) { _, l ->
-        when (l) {
-            None -> ErrorExpr.emptyParamListForSymbol(this)
-            is Cons -> when (l.allInstanceOf(Number::class.java)) {
-                true -> op(l as Cons<Number>)
-                false -> ErrorExpr.paramsNotNumbers(this, l)
-            }
-        }
+        Right(l)
+            .flatMap { it.allOfType<Number>() }
+            .flatMap { it.assertCons() }
+            .map(op)
+            .merge()
     }
 }
 
-fun qExprFun(name: String, l: L<Expr>, f: (Cons<Expr>) -> Expr): Expr {
-    return if (l is Cons && l.isOneElement() && l.head is QExpr && l.head.content is Cons) {
-        f(l.head.content)
-    } else {
-        ErrorExpr(reason = "$name expects one parameter of type QExpr with at least one element but got $l")
-    }
-}
+fun qExprFun(l: L<Expr>, f: (Cons<Expr>) -> Expr): Expr = l.assertOneExpr()
+    .flatMap { it.assertType<QExpr>() }
+    .flatMap { it.content.assertCons() }
+    .map(f)
+    .merge()
 
 val plus = mathOp("+") { cons -> cons.reduce(Number::plus) }
 val multiply = mathOp("*") { cons -> cons.reduce(Number::times) }
 val divide = mathOp("/") { cons -> cons.reduce(Number::div) }
 val minus = mathOp("-") { cons -> if (cons.isOneElement()) Number(-cons.head.value) else cons.reduce(Number::minus) }
 val list = Symbol.Builtin("list") { _, l -> QExpr(l) }
-val head = Symbol.Builtin("head") { _, l -> qExprFun("head", l) { cons -> QExpr(cons.head) } }
-val tail = Symbol.Builtin("tail") { _, l -> qExprFun("tail", l) { cons -> QExpr(cons.tail) } }
-val eval = Symbol.Builtin("eval") { env, l -> qExprFun("eval", l) { cons -> SExpr(cons).eval(env) } }
+val head = Symbol.Builtin("head") { _, l -> qExprFun(l) { cons -> QExpr(cons.head) } }
+val tail = Symbol.Builtin("tail") { _, l -> qExprFun(l) { cons -> QExpr(cons.tail) } }
+val eval = Symbol.Builtin("eval") { env, l -> qExprFun(l) { cons -> SExpr(cons).eval(env) } }
 val join = Symbol.Builtin("join") { _, l ->
-    when (l.allInstanceOf(QExpr::class.java)) {
-        true -> (l as L<QExpr>).run { QExpr(map(QExpr::content).flatten()) }
-        false -> ErrorExpr(reason = "join expects one or more parameters of type QExpr but got $l")
-    }
+    Right(l)
+        .flatMap { it.allOfType<QExpr>() }
+        .flatMap { it.assertCons() }
+        .map { it.map(QExpr::content) }
+        .map { it.flatten() }
+        .map { QExpr(it) }
+        .merge()
 }
-val def = Symbol.Builtin("def") { env, l ->
-    if (l is Cons && l.head is QExpr && l.head.content.allInstanceOf(Symbol.Unbound::class.java)) {
-        val symbols = l.head.content as L<Symbol.Unbound>
-        symbols.zip(l.tail, ::Pair).forEach { (runtimeSymbol, expr) ->
-            env.set(runtimeSymbol.bindTo(expr), true)
-        }
-        SExpr()
-    } else {
-        ErrorExpr(reason = "def cannot define non-symbol in $l")
-    }
-}
+val def = define("def", true)
+val assign = define("=", false)
 val lambda = Symbol.Builtin("\\") { _, l ->
-    if (
-        l.size == 2 &&
-        l is Cons &&
-        l.head is QExpr &&
-        l.tail is Cons &&
-        l.tail.head is QExpr &&
-        l.head.content.allInstanceOf(Symbol.Unbound::class.java)
-    ) {
-        val symbols = l.head.content as L<Symbol.Unbound>
-        val body = l.tail.head
-        Lambda(symbols, body)
-    } else {
-        ErrorExpr(reason = "TODO error message")
+    l.assertTwoExprs()
+        .flatMap { (a, b) -> assertTypes<QExpr, QExpr>(a, b) }
+        .map { (a, b) -> Pair(a.content, b) }
+        .flatMap { (arguments, body) ->
+            arguments.allOfType<Symbol.Unbound>()
+                .map { symbols -> Lambda(symbols, body) }
+        }.merge()
+}
+
+val `if` = Symbol.Builtin("if") { env, l ->
+    l.assertThreeExprs()
+        .flatMap { (a, b, c) -> assertTypes<Bool, QExpr, QExpr>(a, b, c) }
+        .map { (a, b, c) -> Triple(a, b.toSExpr(), c.toSExpr()) }
+        .map { (a, b, c) -> if (a is True) b else c }
+        .map { it.eval(env) }
+        .merge()
+}
+
+fun define(op: String, global: Boolean): Symbol.Builtin {
+    return Symbol.Builtin(op) { env, l ->
+        val setSymbol: (Pair<Symbol.Unbound, Expr>) -> Unit = { (symbol, expr) ->
+            env.set(symbol.bindTo(expr), global)
+        }
+        l.assertCons()
+            .flatMap { (a, b) ->
+                a.assertType<QExpr>().map { qExpr -> Pair(qExpr, b) }
+            }
+            .flatMap { (a, b) ->
+                a.content.allOfType<Symbol.Unbound>()
+                    .map { symbols -> Pair(symbols, b) }
+            }
+            .map { (symbols, arguments) -> symbols.zip(arguments, ::Pair) }
+            .map { it.forEach(setSymbol).run { SExpr() } }
+            .merge()
     }
 }
 
@@ -218,3 +231,6 @@ fun Expr.deepConstitution(env: Env): Expr {
         else -> env[this, false] ?: this
     }
 }
+
+fun QExpr.toSExpr(): SExpr = SExpr(content)
+

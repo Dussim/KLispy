@@ -1,7 +1,12 @@
 package env
 
 import Expr
+import False
 import Symbol
+import True
+import `if`
+import assign
+import bindTo
 import datastructures.L
 import datastructures.forEach
 import datastructures.of
@@ -36,8 +41,29 @@ fun Env.set(symbol: Symbol.Bound, global: Boolean = false) = this.set(symbol.sym
 fun Env.subEnv(): Env = EnvImpl(this)
 
 fun Env.addBuiltIns() {
-    L.of(plus, minus, divide, multiply, list, head, tail, eval, join, def, lambda, greaterThan, lessThan, greaterEqual, lessEqual, equal, notEqual)
-        .forEach(::set)
+    L.of(
+        plus,
+        minus,
+        divide,
+        multiply,
+        list,
+        head,
+        tail,
+        eval,
+        join,
+        def,
+        assign,
+        lambda,
+        greaterThan,
+        lessThan,
+        greaterEqual,
+        lessEqual,
+        equal,
+        notEqual,
+        `if`
+    ).forEach(::set)
+    set(Symbol.Unbound("true").bindTo(True))
+    set(Symbol.Unbound("false").bindTo(False))
 }
 
 operator fun Env.get(expr: Expr, global: Boolean = true): Expr? = when (expr) {

@@ -64,6 +64,14 @@ fun <T> L<T>.find(predicate: (T) -> Boolean): O<T> = when (this) {
     }
 }
 
+fun <T> L<T>.filter(predicate: (T) -> Boolean): L<T> = when (this) {
+    None -> None
+    is Cons -> when (predicate(head)) {
+        true -> Cons(head, tail.filter(predicate))
+        false -> tail.filter(predicate)
+    }
+}
+
 fun <T> L<T>.isEmpty(): Boolean = this is None
 
 fun <T> L<T>.isNotEmpty(): Boolean = this is Cons
@@ -114,7 +122,10 @@ private fun <T> L<T>.joinToStringInternal(
     transform: (T) -> String
 ): String = when (this) {
     None -> suffix
-    is Cons -> "${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, transform = transform)}"
+    is Cons -> when (tail) {
+        None -> "${transform(head)} ${tail.joinToStringInternal(prefix, suffix, transform = transform)}"
+        is Cons -> "${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, transform = transform)}"
+    }
 }
 
 fun <T, V, R> L<T>.zip(o: L<V>, op: (T, V) -> R): L<R> = when {

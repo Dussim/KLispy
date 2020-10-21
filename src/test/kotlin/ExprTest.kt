@@ -9,10 +9,9 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.TestFactory
 import utils.compose
-import utils.emptyParamListForSymbol
-import utils.paramsNotNumbers
 import kotlin.math.pow
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 internal class ExprTest {
     lateinit var env: Env
@@ -45,7 +44,9 @@ internal class ExprTest {
                 dynamicTest(
                     "given datastructures.empty list, when operator '$symbol' is evaluated then error is returned"
                 ) {
-                    assertEquals(ErrorExpr.emptyParamListForSymbol(symbol), symbol.eval(env, L.empty()))
+                    assertTrue {
+                        symbol.eval(env, L.empty()) is ErrorExpr
+                    }
                 }
             }
 
@@ -57,8 +58,9 @@ internal class ExprTest {
                     "given non-numbers list, when operator '$symbol' is evaluated then error is returned"
                 ) {
                     val l = L.of(ErrorExpr(reason = "This is not a number"))
-
-                    assertEquals(ErrorExpr.paramsNotNumbers(symbol, l), symbol.eval(env, l))
+                    assertTrue {
+                        symbol.eval(env, l) is ErrorExpr
+                    }
                 }
             }
 
