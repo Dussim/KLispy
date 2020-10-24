@@ -112,7 +112,10 @@ fun <T> L<T>.joinToString(
     transform: (T) -> String = { it.toString() }
 ): String = when (this) {
     None -> "$prefix $suffix"
-    is Cons -> "$prefix ${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, separator, transform)}"
+    is Cons -> when (tail) {
+        None -> "$prefix ${transform(head)} ${tail.joinToStringInternal(prefix, suffix, separator, transform)}"
+        is Cons -> "$prefix ${transform(head)}$separator ${tail.joinToStringInternal(prefix, suffix, separator, transform)}"
+    }
 }
 
 private fun <T> L<T>.joinToStringInternal(
@@ -134,3 +137,35 @@ fun <T, V, R> L<T>.zip(o: L<V>, op: (T, V) -> R): L<R> = when {
 }
 
 fun <T> L<T>.iterator(): Iter<T> = ListIter(this)
+
+fun <T> L<T>.takeUntil(predicate: (T) -> Boolean): L<T> = when (this) {
+    None -> None
+    is Cons -> when (predicate(head)) {
+        true -> None
+        false -> Cons(head, tail.takeUntil(predicate))
+    }
+}
+
+fun <T> L<T>.takeWhile(predicate: (T) -> Boolean): L<T> = when (this) {
+    None -> None
+    is Cons -> when (predicate(head)) {
+        true -> Cons(head, tail.takeUntil(predicate))
+        false -> None
+    }
+}
+
+fun <T> L<T>.takeAfter(predicate: (T) -> Boolean): L<T> = when (this) {
+    None -> None
+    is Cons -> when (predicate(head)) {
+        true -> tail
+        false -> tail.takeAfter(predicate)
+    }
+}
+
+fun <T> L<T>.take(count: Int): L<T> = when (this) {
+    None -> None
+    is Cons -> when (count > 0) {
+        true -> Cons(head, tail.take(count - 1))
+        false -> None
+    }
+}

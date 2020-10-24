@@ -1,12 +1,15 @@
 import asserts.allOfType
 import asserts.assertAtLeastOneExpr
 import asserts.assertCons
+import asserts.assertLength
 import asserts.assertOneExpr
 import asserts.assertThreeExprs
 import asserts.assertTwoExprs
 import asserts.assertType
 import asserts.assertTypes
+import asserts.mapErrorMessage
 import datastructures.Cons
+import datastructures.Either
 import datastructures.L
 import datastructures.Left
 import datastructures.Right
@@ -15,14 +18,21 @@ import datastructures.find
 import datastructures.flatMap
 import datastructures.flatten
 import datastructures.forEach
+import datastructures.index
 import datastructures.isEmpty
 import datastructures.isOneElement
 import datastructures.iterator
 import datastructures.joinToString
 import datastructures.map
+import datastructures.mapLeft
 import datastructures.merge
 import datastructures.of
 import datastructures.reduce
+import datastructures.reverse
+import datastructures.size
+import datastructures.take
+import datastructures.takeAfter
+import datastructures.takeUntil
 import datastructures.zip
 import env.Env
 import env.get
@@ -38,6 +48,8 @@ sealed class Expr {
 }
 
 data class ErrorExpr(val reason: String) : Expr() {
+    override fun toString(): String = "Error: $reason"
+
     override fun eval(env: Env, l: L<Expr>): Expr = TODO()
 
     companion object
@@ -90,18 +102,21 @@ data class QExpr(val content: L<Expr>) : Expr() {
 data class Lambda(val symbols: L<Symbol.Unbound>, val body: QExpr) : Expr() {
     override fun eval(env: Env, l: L<Expr>): Expr {
         val innerEnv = env.subEnv()
+        val setSymbol: (Pair<Symbol.Unbound, Expr>) -> Unit = { (symbol, expr) ->
+            innerEnv.set(symbol.bindTo(expr))
+        }
         val symbolsIterator = symbols.iterator()
         val valuesIterator = l.iterator()
-
-        symbolsIterator.zip(valuesIterator, ::Pair).forEach { (unbound, expr) ->
-            innerEnv.set(unbound.bindTo(expr))
-        }
-
-        // currying
-        return when (symbolsIterator.hasNext()) {
-            true -> Lambda(symbolsIterator.toL(), body.deepConstitution(innerEnv) as QExpr)
-            false -> SExpr(body.content).eval(innerEnv)
-        }
+        return when (symbols.find { it.symbol == ":" }) {
+            is Some -> prepareVarargs(symbols, l).mapErrorMessage { "Curried varargs are not supported, $it" }
+            else -> Right(symbolsIterator.zip(valuesIterator, ::Pair))
+        }.map {
+            it.forEach(setSymbol)
+            when (symbolsIterator.hasNext()) {
+                true -> Lambda(symbolsIterator.toL(), body.deepConstitution(innerEnv) as QExpr)
+                false -> SExpr(body.content).eval(innerEnv)
+            }
+        }.merge()
     }
 
     override fun toString(): String = "\\ ${symbols.joinToString("{", "}")} $body"
@@ -212,10 +227,40 @@ fun define(op: String, global: Boolean): Symbol.Builtin {
                 a.content.allOfType<Symbol.Unbound>()
                     .map { symbols -> Pair(symbols, b) }
             }
-            .map { (symbols, arguments) -> symbols.zip(arguments, ::Pair) }
+            .flatMap { (symbols, arguments) ->
+                when (symbols.find { it.symbol == ":" }) {
+                    is Some -> prepareVarargs(symbols, arguments)
+                    else -> prepareNormalArgs(symbols, arguments)
+                }
+            }
             .map { it.forEach(setSymbol).run { SExpr() } }
             .merge()
     }
+}
+
+private fun prepareVarargs(symbols: L<Symbol.Unbound>, arguments: L<Expr>): Either<ErrorExpr, L<Pair<Symbol.Unbound, Expr>>> {
+    return arguments.assertLength(symbols.size - 1, true)
+        .mapLeft { ErrorExpr("Arguments list ${SExpr(arguments)} of size ${arguments.size} should have length at least as symbols list ${SExpr(symbols)} of size ${symbols.size - 1}") }
+        .flatMap {
+            val start = symbols.takeUntil { it.symbol == ":" }
+            val startArgs = arguments.take(start.size)
+            val xs = symbols.takeAfter { it.symbol == ":" }
+            val xsArgs = arguments.index(start.size)
+            val startExprs = start.zip(startArgs, ::Pair)
+
+            xs.assertOneExpr()
+                .flatMap { it.assertType<Symbol.Unbound>() }
+                .map { Pair(it, QExpr(xsArgs)) }
+                .map { xsExpr ->
+                    Cons(xsExpr, startExprs.reverse()).reverse()
+                }
+        }
+}
+
+private fun prepareNormalArgs(symbols: L<Symbol.Unbound>, arguments: L<Expr>): Either<ErrorExpr, L<Pair<Symbol.Unbound, Expr>>> {
+    return arguments.assertLength(symbols.size)
+        .mapLeft { ErrorExpr("Arguments list ${SExpr(arguments)} of size ${arguments.size} should have same length as symbols list ${SExpr(symbols)} of size ${symbols.size - 1}") }
+        .map { symbols.zip(it, ::Pair) }
 }
 
 fun Symbol.Unbound.bindTo(expr: Expr): Symbol.Bound = Symbol.Bound(symbol, expr)

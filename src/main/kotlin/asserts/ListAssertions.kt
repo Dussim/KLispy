@@ -12,6 +12,7 @@ import datastructures.empty
 import datastructures.flatMap
 import datastructures.forEach
 import datastructures.map
+import datastructures.reverse
 import datastructures.right
 import datastructures.size
 
@@ -25,7 +26,7 @@ inline fun <reified T : Expr> L<Expr>.allOfType(): Either<ErrorExpr, L<T>> = whe
                 element.map { Cons(it, list) }
             }
         }
-        current
+        current.map { it.reverse() }
     }
 }
 
