@@ -5,19 +5,28 @@ import datastructures.flatMap
 import datastructures.map
 import datastructures.mapLeft
 import datastructures.merge
+import expr.ErrorExpr
+import expr.Expr
+import expr.False
+import expr.NumberExpr
+import expr.SymbolExpr
+import expr.True
 
-private fun implementedFor(symbol: String, a: Expr, b: Expr) = "( $symbol Number Number ) but got ( $symbol ${a.typeName} ${b.typeName} )"
+private fun implementedFor(symbol: String, a: Expr, b: Expr) = "( $symbol NumberExpr NumberExpr ) but got ( $symbol ${a.typeName} ${b.typeName} )"
 
 private fun Boolean.toExpr(): Expr = if (this) True else False
 
-private fun order(l: L<Expr>, compare: (Number, Number) -> Expr): Expr {
+private fun order(symbol: String, l: L<Expr>, compare: (NumberExpr, NumberExpr) -> Expr): Expr {
     return l.assertTwoExprs()
-        .flatMap { (a, b) -> assertTypes<Number, Number>(a, b) }
+        .flatMap { (a, b) ->
+            assertTypes<NumberExpr, NumberExpr>(a, b)
+                .mapLeft { ErrorExpr("$symbol is currently only implemented for ${implementedFor(symbol, a, b)}") }
+        }
         .map { (a, b) -> compare(a, b) }
         .merge()
 }
 
-private fun comparison(symbol: String, compare: (Number, Number) -> Boolean): Symbol.Builtin = Symbol.Builtin(symbol) { _, l -> order(l) { a, b -> compare(a, b).toExpr() } }
+private fun comparison(symbol: String, compare: (NumberExpr, NumberExpr) -> Boolean): SymbolExpr.Builtin = SymbolExpr.Builtin(symbol) { _, l -> order(symbol, l) { a, b -> compare(a, b).toExpr() } }
 
 val Expr.typeName get() = this::class.simpleName
 
@@ -29,7 +38,7 @@ val lessEqual = comparison(">=") { a, b -> a >= b }
 private fun eq(op: String, l: L<Expr>, f: (Double, Double) -> Boolean): Expr {
     return l.assertTwoExprs()
         .flatMap { (a, b) ->
-            assertTypes<Number, Number>(a, b)
+            assertTypes<NumberExpr, NumberExpr>(a, b)
                 .mapLeft { ErrorExpr("Equality is currently only implemented for ${implementedFor(op, a, b)}") }
         }
         .map { (a, b) -> Pair(a.value, b.value) }
@@ -37,9 +46,9 @@ private fun eq(op: String, l: L<Expr>, f: (Double, Double) -> Boolean): Expr {
         .merge()
 }
 
-val equal = Symbol.Builtin("==") { env, l ->
+val equal = SymbolExpr.Builtin("==") { env, l ->
     eq("==", l) { a, b -> a == b }
 }
-val notEqual = Symbol.Builtin("!=") { env, l ->
+val notEqual = SymbolExpr.Builtin("!=") { env, l ->
     eq("!=", l) { a, b -> a != b }
 }

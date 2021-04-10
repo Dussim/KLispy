@@ -5,6 +5,12 @@ import datastructures.map
 import datastructures.of
 import env.Env
 import env.EnvImpl
+import expr.ErrorExpr
+import expr.NumberExpr
+import expr.divide
+import expr.minus
+import expr.multiply
+import expr.plus
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.TestFactory
@@ -27,7 +33,7 @@ internal class ExprTest {
             .map(::generateNFirstNumbersTestCase)
             .map { (list, expected) ->
                 L.of(*list.toTypedArray())
-                    .map(Int::toDouble compose ::Number) to expected
+                    .map(Int::toDouble compose ::NumberExpr) to expected
             }.map { (l, expected) ->
                 val listAsString = l.joinToString("(", ")") { it.value.toString() }
                 dynamicTest(
@@ -64,7 +70,7 @@ internal class ExprTest {
                 }
             }
 
-    private fun generateNFirstNumbersTestCase(n: Int): Pair<List<Int>, Number> {
-        return List(n) { it + 1 } to Number((n.toDouble().pow(2.0) + n) / 2.0)
+    private fun generateNFirstNumbersTestCase(n: Int): Pair<List<Int>, NumberExpr> {
+        return List(n) { it + 1 } to NumberExpr((n.toDouble().pow(2.0) + n) / 2.0)
     }
 }

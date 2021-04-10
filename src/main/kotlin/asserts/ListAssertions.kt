@@ -1,7 +1,5 @@
 package asserts
 
-import ErrorExpr
-import Expr
 import datastructures.Cons
 import datastructures.Either
 import datastructures.L
@@ -15,6 +13,8 @@ import datastructures.map
 import datastructures.reverse
 import datastructures.right
 import datastructures.size
+import expr.ErrorExpr
+import expr.Expr
 
 @Suppress("UNCHECKED_CAST")
 inline fun <reified T : Expr> L<Expr>.allOfType(): Either<ErrorExpr, L<T>> = when (this) {

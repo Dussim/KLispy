@@ -1,7 +1,5 @@
 package asserts
 
-import ErrorExpr
-import Expr
 import datastructures.Either
 import datastructures.L
 import datastructures.Left
@@ -12,6 +10,8 @@ import datastructures.joinToString
 import datastructures.map
 import datastructures.mapLeft
 import datastructures.of
+import expr.ErrorExpr
+import expr.Expr
 import typeName
 
 fun <T> Either<ErrorExpr, T>.mapErrorMessage(f: (String) -> String): Either<ErrorExpr, T> {

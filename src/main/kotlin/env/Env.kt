@@ -1,32 +1,32 @@
 package env
 
-import Expr
-import False
-import Symbol
-import True
-import `if`
-import assign
-import bindTo
 import datastructures.L
 import datastructures.forEach
 import datastructures.of
-import def
-import divide
 import equal
-import eval
+import expr.Expr
+import expr.False
+import expr.SymbolExpr
+import expr.True
+import expr.`if`
+import expr.assign
+import expr.bindTo
+import expr.def
+import expr.divide
+import expr.eval
+import expr.head
+import expr.join
+import expr.list
+import expr.makeLambda
+import expr.minus
+import expr.multiply
+import expr.plus
+import expr.tail
 import greaterEqual
 import greaterThan
-import head
-import join
-import lambda
 import lessEqual
 import lessThan
-import list
-import minus
-import multiply
 import notEqual
-import plus
-import tail
 
 interface Env {
     val parent: Env?
@@ -35,8 +35,8 @@ interface Env {
     operator fun set(symbol: String, global: Boolean = false, expr: Expr)
 }
 
-fun Env.set(symbol: Symbol.Builtin, global: Boolean = false) = this.set(symbol.symbol, global, symbol)
-fun Env.set(symbol: Symbol.Bound, global: Boolean = false) = this.set(symbol.symbol, global, symbol.expr)
+fun Env.set(symbolExpr: SymbolExpr.Builtin, global: Boolean = false) = this.set(symbolExpr.symbol, global, symbolExpr)
+fun Env.set(symbolExpr: SymbolExpr.Bound, global: Boolean = false) = this.set(symbolExpr.symbol, global, symbolExpr.expr)
 
 fun Env.subEnv(): Env = EnvImpl(this)
 
@@ -53,7 +53,7 @@ fun Env.addBuiltIns() {
         join,
         def,
         assign,
-        lambda,
+        makeLambda,
         greaterThan,
         lessThan,
         greaterEqual,
@@ -62,11 +62,11 @@ fun Env.addBuiltIns() {
         notEqual,
         `if`
     ).forEach(::set)
-    set(Symbol.Unbound("true").bindTo(True))
-    set(Symbol.Unbound("false").bindTo(False))
+    set(SymbolExpr.Unbound("true").bindTo(True))
+    set(SymbolExpr.Unbound("false").bindTo(False))
 }
 
 operator fun Env.get(expr: Expr, global: Boolean = true): Expr? = when (expr) {
-    is Symbol -> get(expr.symbol, global)
+    is SymbolExpr -> get(expr.symbol, global)
     else -> null
 }

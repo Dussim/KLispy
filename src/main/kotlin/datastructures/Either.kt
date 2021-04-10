@@ -1,14 +1,14 @@
 package datastructures
 
-sealed class Either<out L, out R> {
+sealed interface Either<out L, out R> {
     companion object
 }
 
-data class Left<out L>(val left: L) : Either<L, Nothing>() {
+data class Left<out L>(val left: L) : Either<L, Nothing> {
     operator fun invoke() = left
 }
 
-data class Right<out R>(val right: R) : Either<Nothing, R>() {
+data class Right<out R>(val right: R) : Either<Nothing, R> {
     operator fun invoke() = right
 }
 

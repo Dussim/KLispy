@@ -1,7 +1,11 @@
 import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
+import com.github.h0tk3y.betterParse.parser.ParseException
 import env.EnvImpl
 import env.addBuiltIns
+import expr.ErrorExpr
+import expr.Expr
+import expr.SExpr
 import parser.KLispyParser
 import java.io.File
 import java.util.Scanner
@@ -11,7 +15,8 @@ fun main() {
     val stdFile = File("./src/main/resources/std.lisp")
     val env = EnvImpl()
     env.addBuiltIns()
-    stdFile.parse(parser).eval(env)
+    val stdExpr = stdFile.parse(parser)
+    stdExpr.eval(env)
     val s = Scanner(System.`in`)
     while (true) {
         print("klispy> ")
@@ -20,16 +25,21 @@ fun main() {
         if (line.startsWith("parse")) {
             line.substringAfter("parse").toExpr(parser).also { println("parsed -> $it") }
         } else {
-            println(line.toExpr(parser).eval(env))
+            val expr = line.toExpr(parser).eval(env)
+            println(expr)
         }
     }
     s.close()
 }
 
-private fun String.toExpr(parser: Grammar<SExpr>): SExpr {
-    return parser.parseToEnd(this)
+private fun String.toExpr(parser: Grammar<SExpr>): Expr {
+    return try {
+        parser.parseToEnd(this)
+    } catch (e: ParseException) {
+        ErrorExpr(e.message.orEmpty())
+    }
 }
 
-private fun File.parse(parser: Grammar<SExpr>): SExpr {
+private fun File.parse(parser: Grammar<SExpr>): Expr {
     return readText().toExpr(parser)
 }
