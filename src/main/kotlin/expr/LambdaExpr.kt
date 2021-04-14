@@ -4,12 +4,14 @@ import asserts.mapErrorMessage
 import datastructures.L
 import datastructures.Right
 import datastructures.Some
+import datastructures.all
 import datastructures.find
 import datastructures.forEach
 import datastructures.iterator
 import datastructures.joinToString
 import datastructures.map
 import datastructures.merge
+import datastructures.zip
 import env.Env
 import env.get
 import env.set
@@ -40,6 +42,12 @@ data class LambdaExpr(val symbols: L<SymbolExpr.Unbound>, val body: QExpr) : Exp
     }
 
     override fun toString(): String = "\\ ${symbols.joinToString("{", "}")} $body"
+
+    override fun eq(o: Expr): Boolean {
+        return if (o is LambdaExpr) {
+            body == o.body && symbols.zip(o.symbols) { a, b -> a == b }.all()
+        } else false
+    }
 }
 
 fun Expr.deepConstitution(env: Env): Expr {

@@ -9,4 +9,8 @@ data class ErrorExpr(val reason: String) : Expr {
     override fun eval(env: Env, l: L<Expr>): Expr = cantApply(env, parameters = l, to = "ErrorExpr(${toString()}")
 
     override fun eval(env: Env): Expr = this
+
+    override fun eq(o: Expr): Boolean {
+        return (o as? ErrorExpr)?.reason == reason
+    }
 }

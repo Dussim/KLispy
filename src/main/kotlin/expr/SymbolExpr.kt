@@ -40,6 +40,10 @@ sealed class SymbolExpr : Expr {
         override fun eval(env: Env): Expr = expr
         override fun eval(env: Env, l: L<Expr>): Expr = expr.eval(env, l)
     }
+
+    override fun eq(o: Expr): Boolean {
+        return (o as? SymbolExpr)?.symbol == symbol
+    }
 }
 
 fun SymbolExpr.Unbound.bindTo(expr: Expr): SymbolExpr.Bound = SymbolExpr.Bound(symbol, expr)

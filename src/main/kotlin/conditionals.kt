@@ -35,20 +35,11 @@ val lessThan = comparison(">") { a, b -> a > b }
 val greaterEqual = comparison("<=") { a, b -> a <= b }
 val lessEqual = comparison(">=") { a, b -> a >= b }
 
-private fun eq(op: String, l: L<Expr>, f: (Double, Double) -> Boolean): Expr {
+private fun eq(l: L<Expr>, f: (Expr, Expr) -> Boolean): Expr {
     return l.assertTwoExprs()
-        .flatMap { (a, b) ->
-            assertTypes<NumberExpr, NumberExpr>(a, b)
-                .mapLeft { ErrorExpr("Equality is currently only implemented for ${implementedFor(op, a, b)}") }
-        }
-        .map { (a, b) -> Pair(a.value, b.value) }
         .map { (a, b) -> f(a, b).toExpr() }
         .merge()
 }
 
-val equal = SymbolExpr.Builtin("==") { env, l ->
-    eq("==", l) { a, b -> a == b }
-}
-val notEqual = SymbolExpr.Builtin("!=") { env, l ->
-    eq("!=", l) { a, b -> a != b }
-}
+val equal = SymbolExpr.Builtin("==") { _, l -> eq(l) { a, b -> a.eq(b) } }
+val notEqual = SymbolExpr.Builtin("!=") { _, l -> eq(l) { a, b -> !a.eq(b) } }

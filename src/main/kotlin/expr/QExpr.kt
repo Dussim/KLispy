@@ -5,7 +5,9 @@ import datastructures.joinToString
 import datastructures.of
 import env.Env
 
-data class QExpr(val content: L<Expr>) : Expr {
+data class QExpr(override val content: L<Expr>) : ListExpr {
+    override val type: ListExpr.ListExprType = ListExpr.ListExprType.QEXPR
+
     constructor(vararg expr: Expr) : this(L.of(*expr))
 
     override fun toString(): String = content.joinToString("{", "}")

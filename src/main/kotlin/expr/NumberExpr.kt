@@ -17,4 +17,8 @@ data class NumberExpr(val value: Double) : Expr {
 
     override fun eval(env: Env): Expr = this
     override fun eval(env: Env, l: L<Expr>): Expr = cantApply(env, parameters = l, to = "Number($value)")
+
+    override fun eq(o: Expr): Boolean {
+        return (o as? NumberExpr)?.value == value
+    }
 }
