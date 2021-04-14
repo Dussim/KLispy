@@ -169,3 +169,8 @@ fun <T> L<T>.take(count: Int): L<T> = when (this) {
         false -> None
     }
 }
+
+fun L<Boolean>.all(): Boolean = when (this) {
+    None -> true
+    is Cons -> head && tail.all()
+}
